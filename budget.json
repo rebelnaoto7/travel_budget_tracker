@@ -1,0 +1,13 @@
+@'
+{
+  "total_budget_jpy": 100000,
+  "category_budgets": {
+    "食費": 20000,
+    "交通": 10000,
+    "宿泊": 40000,
+    "買い物": 15000,
+    "観光": 10000,
+    "その他": 5000
+  }
+}
+'@ | Set-Content -Path budget.json -Encoding UTF8
