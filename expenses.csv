@@ -1,2 +1,4 @@
-﻿"Set-Content -Path expenses.csv -Value ""date",item,category,amount_local,currency,rate_to_jpy,amount_jpy,"memo""",date
-,食事,食費,100.0,USD,159.0,15900.0,,2026-04-27
+﻿date,item,category,amount_local,currency,rate_to_jpy,amount_jpy,memo
+2026-04-27,食事,食費,100.0,USD,159.0,15900.0,
+2026-04-30,ランチ,食費,50.0,USD,160.0,8000.0,
+2026-04-30,ランチ,交通,300.0,THB,5.0,1500.0,

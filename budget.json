@@ -1,4 +1,3 @@
-@'
 {
   "total_budget_jpy": 100000,
   "category_budgets": {
@@ -10,4 +9,3 @@
     "その他": 5000
   }
 }
-'@ | Set-Content -Path budget.json -Encoding UTF8
