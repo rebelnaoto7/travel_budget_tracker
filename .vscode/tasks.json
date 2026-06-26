@@ -1,0 +1,21 @@
+{
+  // ターミナル → タスクの実行 から呼び出せる定型コマンド
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "migrate",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe manage.py migrate"
+    },
+    {
+      "label": "seed_demo",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe manage.py seed_demo"
+    },
+    {
+      "label": "runserver",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe manage.py runserver"
+    }
+  ]
+}

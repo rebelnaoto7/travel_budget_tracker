@@ -1,0 +1,351 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>旅行予算管理アプリ</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --card:#ffffff; --line:#e3e8ef; --txt:#1f2933;
+    --muted:#64748b; --accent:#2563eb; --ok:#16a34a; --warn:#d97706; --err:#dc2626;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Meiryo UI","Meiryo","Yu Gothic UI","Yu Gothic",sans-serif;
+    margin:0; background:var(--bg); color:var(--txt); line-height:1.6;
+  }
+  .wrap{max-width:1100px; margin:0 auto; padding:24px 16px 64px;}
+  h1{font-size:24px; margin:0 0 4px;}
+  .caption{color:var(--muted); margin:0 0 24px; font-size:14px;}
+  .layout{display:grid; grid-template-columns:300px 1fr; gap:20px;}
+  @media (max-width:860px){ .layout{grid-template-columns:1fr;} }
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px;}
+  .card h2{font-size:16px; margin:0 0 14px; padding-bottom:8px; border-bottom:1px solid var(--line);}
+  label{display:block; font-size:13px; color:var(--muted); margin:10px 0 4px;}
+  .inp{width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit;}
+  .inp:focus{outline:none; border-color:var(--accent);}
+  .btn{display:inline-block; background:var(--accent); color:#fff; border:none; border-radius:8px;
+       padding:10px 16px; font-size:14px; cursor:pointer; font-family:inherit; margin-top:14px;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn-sm{padding:4px 10px; font-size:12px; margin:0; background:#ef4444;}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+  @media (max-width:560px){ .grid3{grid-template-columns:1fr;} }
+  .metric{background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:12px;}
+  .metric .lbl{font-size:12px; color:var(--muted);}
+  .metric .val{font-size:20px; font-weight:700; margin-top:2px;}
+  .bar{height:10px; border-radius:6px; background:#eef2f7; margin-top:12px; overflow:hidden;}
+  .bar > span{display:block; height:100%; background:var(--accent);}
+  .alert{padding:10px 14px; border-radius:8px; margin-top:14px; font-size:14px;}
+  .alert.error{background:#fef2f2; color:var(--err); border:1px solid #fecaca;}
+  .alert.warning{background:#fffbeb; color:var(--warn); border:1px solid #fde68a;}
+  .alert.ok{background:#f0fdf4; color:var(--ok); border:1px solid #bbf7d0;}
+  .errlist{color:var(--err); font-size:12px; margin:4px 0 0; padding-left:16px;}
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th,td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--line);}
+  th{background:#f8fafc; color:var(--muted); font-weight:600;}
+  td.num,th.num{text-align:right;}
+  .tabs{display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:16px; flex-wrap:wrap;}
+  .tab{padding:10px 14px; cursor:pointer; font-size:14px; color:var(--muted); border-bottom:2px solid transparent;}
+  .tab.active{color:var(--accent); border-bottom-color:var(--accent); font-weight:600;}
+  .panel{display:none;} .panel.active{display:block;}
+  .charts{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width:760px){ .charts{grid-template-columns:1fr;} }
+  .empty{color:var(--muted); font-size:14px; padding:12px 0;}
+  .chip{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px;}
+  .chip.error{background:#fef2f2; color:var(--err);}
+  .chip.warning{background:#fffbeb; color:var(--warn);}
+  .chip.ok{background:#f0fdf4; color:var(--ok);}
+  .toast{margin-bottom:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+    <div>
+      <h1>旅行予算管理アプリ</h1>
+      <p class="caption">海外旅行中の支出を現地通貨と円換算の両方で管理し、予算超過を防ぐアプリ</p>
+    </div>
+    <div style="text-align:right; white-space:nowrap;">
+      <span style="font-size:13px; color:var(--muted);">👤 {{ user.username }} さん</span>
+      <form method="post" action="{% url 'logout' %}" style="display:inline; margin-left:8px;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm" style="background:#64748b;">ログアウト</button>
+      </form>
+    </div>
+  </div>
+
+  {% if messages %}
+    <div class="toast">
+      {% for m in messages %}
+        <div class="alert ok">{{ m }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="layout">
+    <!-- ===== 予算設定（元サイドバー） ===== -->
+    <aside>
+      <div class="card">
+        <h2>予算設定</h2>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="budget">
+          <label>{{ budget_form.total_budget_jpy.label }}</label>
+          {{ budget_form.total_budget_jpy }}
+          {% if budget_form.total_budget_jpy.errors %}<ul class="errlist">{{ budget_form.total_budget_jpy.errors }}</ul>{% endif %}
+
+          <div style="margin-top:14px; font-weight:600; font-size:14px;">カテゴリ別予算（円）</div>
+          {% for cat, field in budget_form.category_fields %}
+            <label>{{ cat }}予算</label>
+            {{ field }}
+            {% if field.errors %}<ul class="errlist">{{ field.errors }}</ul>{% endif %}
+          {% endfor %}
+          <button class="btn" type="submit">予算を保存</button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- ===== メイン ===== -->
+    <main>
+      <!-- 支出登録 -->
+      <div class="card">
+        <h2>支出登録</h2>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="expense">
+          <div class="grid3">
+            <div>
+              <label>日付</label>{{ expense_form.date }}
+              {% if expense_form.date.errors %}<ul class="errlist">{{ expense_form.date.errors }}</ul>{% endif %}
+              <label>内容</label>{{ expense_form.item }}
+              {% if expense_form.item.errors %}<ul class="errlist">{{ expense_form.item.errors }}</ul>{% endif %}
+            </div>
+            <div>
+              <label>カテゴリ</label>{{ expense_form.category }}
+              <label>通貨</label>{{ expense_form.currency }}
+            </div>
+            <div>
+              <label>金額（現地通貨）</label>{{ expense_form.amount_local }}
+              {% if expense_form.amount_local.errors %}<ul class="errlist">{{ expense_form.amount_local.errors }}</ul>{% endif %}
+              <label>為替レート（1通貨=何円）</label>{{ expense_form.rate_to_jpy }}
+              {% if expense_form.rate_to_jpy.errors %}<ul class="errlist">{{ expense_form.rate_to_jpy.errors }}</ul>{% endif %}
+            </div>
+          </div>
+          <label>メモ</label>{{ expense_form.memo }}
+          <button class="btn" type="submit">支出を追加</button>
+        </form>
+      </div>
+
+      <!-- 予算サマリー -->
+      <div class="card">
+        <h2>予算サマリー</h2>
+        <div class="grid3">
+          <div class="metric"><div class="lbl">総支出（円）</div><div class="val">{{ total_spent_jpy|floatformat:0 }} 円</div></div>
+          <div class="metric"><div class="lbl">残予算（円）</div><div class="val">{{ remaining_budget|floatformat:0 }} 円</div></div>
+          <div class="metric"><div class="lbl">予算消化率</div><div class="val">{{ usage_rate|floatformat:1 }}%</div></div>
+        </div>
+        <div class="bar"><span style="width:{% if usage_rate > 100 %}100{% else %}{{ usage_rate|floatformat:0 }}{% endif %}%; background:{% if alert_level == 'error' %}var(--err){% elif alert_level == 'warning' %}var(--warn){% else %}var(--accent){% endif %};"></span></div>
+        {% if alert_msg %}<div class="alert {{ alert_level }}">{{ alert_msg }}</div>{% endif %}
+      </div>
+
+      <!-- タブ -->
+      <div class="card">
+        <div class="tabs">
+          <div class="tab active" data-tab="t1">支出一覧（円換算）</div>
+          <div class="tab" data-tab="t2">通貨別集計</div>
+          <div class="tab" data-tab="t3">カテゴリ別集計</div>
+          <div class="tab" data-tab="t4">グラフ</div>
+        </div>
+
+        <!-- タブ1：支出一覧 -->
+        <div class="panel active" id="t1">
+          {% if expenses %}
+          <table>
+            <thead><tr>
+              <th>日付</th><th>内容</th><th>カテゴリ</th><th class="num">金額表示</th><th class="num">為替レート</th><th>メモ</th><th></th>
+            </tr></thead>
+            <tbody>
+              {% for e in expenses %}
+              <tr>
+                <td>{{ e.date|date:"Y-m-d" }}</td>
+                <td>{{ e.item }}</td>
+                <td>{{ e.category }}</td>
+                <td class="num">{{ e.amount_local|floatformat:2 }} {{ e.currency }} / {{ e.amount_jpy|floatformat:0 }} 円</td>
+                <td class="num">{{ e.rate_to_jpy|floatformat:2 }}</td>
+                <td>{{ e.memo }}</td>
+                <td><form method="post" action="{% url 'delete_expense' e.pk %}" onsubmit="return confirm('削除しますか？');">{% csrf_token %}<button class="btn btn-sm" type="submit">削除</button></form></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="empty">まだ支出データがありません。</p>
+          {% endif %}
+        </div>
+
+        <!-- タブ2：通貨別 -->
+        <div class="panel" id="t2">
+          {% if cur_summary %}
+          <table>
+            <thead><tr><th>通貨</th><th class="num">合計金額（現地通貨）</th></tr></thead>
+            <tbody>
+              {% for r in cur_summary %}
+              <tr><td>{{ r.currency }}</td><td class="num">{{ r.amount_local|floatformat:2 }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<p class="empty">通貨別集計データがありません。</p>{% endif %}
+        </div>
+
+        <!-- タブ3：カテゴリ別 -->
+        <div class="panel" id="t3">
+          {% if cat_summary %}
+          <table>
+            <thead><tr><th>カテゴリ</th><th class="num">合計金額（円）</th></tr></thead>
+            <tbody>
+              {% for r in cat_summary %}
+              <tr><td>{{ r.category }}</td><td class="num">{{ r.amount_jpy|floatformat:0 }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <h3 style="font-size:14px; margin:18px 0 8px;">カテゴリ別予算チェック</h3>
+          {% for c in cat_checks %}
+            <div class="alert {{ c.level }}">
+              <span class="chip {{ c.level }}">{{ c.category }}</span>
+              {% if c.level == 'error' %}予算超過{% elif c.level == 'warning' %}予算の80%超{% else %}予算内{% endif %}
+              （支出 {{ c.spent|floatformat:0 }} 円 / 予算 {{ c.budget|floatformat:0 }} 円）
+            </div>
+          {% endfor %}
+          {% else %}<p class="empty">カテゴリ別集計データがありません。</p>{% endif %}
+        </div>
+
+        <!-- タブ4：グラフ -->
+        <div class="panel" id="t4">
+          {% if chart_labels %}
+          <div class="charts">
+            <div>
+              <h3 style="font-size:14px; margin:0 0 8px;">カテゴリ別支出（棒グラフ）</h3>
+              <div style="position:relative; height:280px;"><canvas id="barChart"></canvas></div>
+            </div>
+            <div>
+              <h3 style="font-size:14px; margin:0 0 8px;">カテゴリ別支出割合（円グラフ）</h3>
+              <div style="position:relative; height:280px;"><canvas id="pieChart"></canvas></div>
+            </div>
+          </div>
+          {% else %}<p class="empty">グラフ表示用データがありません。</p>{% endif %}
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+{{ chart_labels|json_script:"chart-labels" }}
+{{ chart_values|json_script:"chart-values" }}
+<script>
+  // ===== 自前のCanvas描画（外部ライブラリ不要・オフライン動作） =====
+  var labels = JSON.parse(document.getElementById("chart-labels").textContent);
+  var values = JSON.parse(document.getElementById("chart-values").textContent);
+  var PALETTE = ["#2563eb","#16a34a","#d97706","#dc2626","#7c3aed","#0891b2","#db2777","#65a30d","#475569"];
+  var chartsReady = false;
+
+  // 高DPI対応でcanvasの実ピクセルを設定
+  function setupCanvas(canvas){
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.parentElement.getBoundingClientRect();
+    var w = rect.width, h = rect.height;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    canvas.style.width = w + "px"; canvas.style.height = h + "px";
+    var ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  function yen(n){ return n.toLocaleString("ja-JP") + " 円"; }
+
+  function drawBar(canvas, labels, values){
+    var s = setupCanvas(canvas), ctx = s.ctx, W = s.w, H = s.h;
+    ctx.clearRect(0,0,W,H);
+    var padL = 50, padR = 16, padT = 16, padB = 48;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var max = Math.max.apply(null, values.concat([1]));
+    // 目盛り（4分割）
+    ctx.strokeStyle = "#e3e8ef"; ctx.fillStyle = "#64748b";
+    ctx.font = "11px 'Meiryo UI',sans-serif"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (var i=0;i<=4;i++){
+      var gy = padT + plotH*(1-i/4);
+      ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(W-padR,gy); ctx.stroke();
+      ctx.fillText(Math.round(max*i/4/1000)+"k", padL-6, gy);
+    }
+    // バー
+    var n = labels.length, gap = plotW/n*0.3, bw = plotW/n - gap;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (var j=0;j<n;j++){
+      var x = padL + plotW*(j/n) + gap/2;
+      var bh = plotH * (values[j]/max);
+      var y = padT + plotH - bh;
+      ctx.fillStyle = PALETTE[j % PALETTE.length];
+      ctx.fillRect(x, y, bw, bh);
+      ctx.fillStyle = "#1f2933"; ctx.font = "11px 'Meiryo UI',sans-serif";
+      ctx.fillText(labels[j], x+bw/2, padT+plotH+6);
+      ctx.fillText(values[j].toLocaleString("ja-JP"), x+bw/2, y-14 < padT ? y+4 : y-14);
+    }
+  }
+
+  function drawPie(canvas, labels, values){
+    var s = setupCanvas(canvas), ctx = s.ctx, W = s.w, H = s.h;
+    ctx.clearRect(0,0,W,H);
+    var total = values.reduce(function(a,b){return a+b;},0) || 1;
+    var legendW = 120;
+    var cx = (W-legendW)/2, cy = H/2, r = Math.min((W-legendW), H)/2 - 12;
+    var ang = -Math.PI/2;
+    for (var i=0;i<values.length;i++){
+      var slice = values[i]/total * Math.PI*2;
+      ctx.beginPath(); ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,r,ang,ang+slice); ctx.closePath();
+      ctx.fillStyle = PALETTE[i % PALETTE.length]; ctx.fill();
+      ang += slice;
+    }
+    // 凡例
+    var lx = W - legendW + 8, ly = 20;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.font = "12px 'Meiryo UI',sans-serif";
+    for (var k=0;k<labels.length;k++){
+      ctx.fillStyle = PALETTE[k % PALETTE.length];
+      ctx.fillRect(lx, ly-6, 12, 12);
+      ctx.fillStyle = "#1f2933";
+      var pct = Math.round(values[k]/total*100);
+      ctx.fillText(labels[k]+" "+pct+"%", lx+18, ly);
+      ly += 22;
+    }
+  }
+
+  function renderCharts(){
+    // 非表示パネルで描画するとサイズが0になるため、タブ表示後に描画する。
+    if (chartsReady || labels.length === 0) return;
+    drawBar(document.getElementById("barChart"), labels, values);
+    drawPie(document.getElementById("pieChart"), labels, values);
+    chartsReady = true;
+  }
+  // リサイズ時は再描画
+  window.addEventListener("resize", function(){
+    if (chartsReady){
+      drawBar(document.getElementById("barChart"), labels, values);
+      drawPie(document.getElementById("pieChart"), labels, values);
+    }
+  });
+
+  // タブ切替
+  document.querySelectorAll(".tab").forEach(function(t){
+    t.addEventListener("click", function(){
+      document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
+      t.classList.add("active");
+      document.getElementById(t.dataset.tab).classList.add("active");
+      // グラフタブが開かれたら描画
+      if (t.dataset.tab === "t4") { renderCharts(); }
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ログイン｜旅行予算管理アプリ</title>
+<style>
+  body{font-family:"Meiryo UI","Meiryo",sans-serif; background:#f5f7fa; color:#1f2933; margin:0;
+       display:flex; align-items:center; justify-content:center; min-height:100vh;}
+  .box{background:#fff; border:1px solid #e3e8ef; border-radius:12px; padding:32px; width:340px;}
+  h1{font-size:20px; margin:0 0 4px; text-align:center;}
+  .sub{color:#64748b; font-size:13px; text-align:center; margin:0 0 24px;}
+  label{display:block; font-size:13px; color:#64748b; margin:12px 0 4px;}
+  input[type=text],input[type=password]{width:100%; padding:9px 10px; border:1px solid #e3e8ef;
+       border-radius:8px; font-size:14px; box-sizing:border-box; font-family:inherit;}
+  input:focus{outline:none; border-color:#2563eb;}
+  .btn{width:100%; background:#2563eb; color:#fff; border:none; border-radius:8px; padding:11px;
+       font-size:15px; cursor:pointer; margin-top:20px; font-family:inherit;}
+  .btn:hover{filter:brightness(1.08);}
+  .err{background:#fef2f2; color:#dc2626; border:1px solid #fecaca; border-radius:8px;
+       padding:8px 12px; font-size:13px; margin-bottom:12px;}
+  .foot{text-align:center; font-size:13px; margin-top:18px; color:#64748b;}
+  a{color:#2563eb; text-decoration:none;}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>🌏 旅行予算管理アプリ</h1>
+    <p class="sub">ログインしてください</p>
+
+    {% if form.errors %}
+      <div class="err">ユーザー名またはパスワードが正しくありません。</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <label>ユーザー名</label>
+      {{ form.username }}
+      <label>パスワード</label>
+      {{ form.password }}
+      <button class="btn" type="submit">ログイン</button>
+      <input type="hidden" name="next" value="{{ next }}">
+    </form>
+
+    <p class="foot">アカウントがない方は <a href="{% url 'signup' %}">新規登録</a></p>
+  </div>
+  <script>
+    // Django のデフォルト widget に class を付与（見た目統一）
+    document.querySelectorAll("#id_username,#id_password").forEach(function(el){
+      el.classList.add("inp");
+    });
+  </script>
+</body>
+</html>

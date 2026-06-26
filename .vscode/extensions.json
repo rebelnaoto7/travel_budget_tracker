@@ -1,0 +1,8 @@
+{
+  // このプロジェクトを開いたとき VS Code が推奨する拡張機能
+  "recommendations": [
+    "ms-python.python",          // Python 本体（必須）
+    "ms-python.debugpy",         // デバッグ（F5実行に必要）
+    "batisteo.vscode-django"     // Django テンプレートの補完・ハイライト
+  ]
+}

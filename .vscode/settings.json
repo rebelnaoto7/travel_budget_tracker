@@ -1,0 +1,26 @@
+{
+  // 仮想環境 .venv の Python を既定インタープリタにする（Windows）
+  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+
+  // 統合ターミナルを開いたとき .venv を自動有効化
+  "python.terminal.activateEnvironment": true,
+
+  // Django テンプレートを HTML として正しく扱う（{% %} の補完・色分け）
+  "files.associations": {
+    "**/templates/**/*.html": "django-html",
+    "**/*.html": "html"
+  },
+
+  // 保存時に末尾空白を削除
+  "files.trimTrailingWhitespace": true,
+
+  // 日本語ファイルの文字化け防止
+  "files.encoding": "utf8",
+
+  // 除外して見やすくする
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/db.sqlite3": false
+  }
+}

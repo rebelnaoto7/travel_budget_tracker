@@ -1,0 +1,26 @@
+{
+  // F5 で Django 開発サーバーをデバッグ起動する設定
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Django: runserver",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/manage.py",
+      "args": ["runserver"],
+      "django": true,
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Django: runserver (no reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/manage.py",
+      "args": ["runserver", "--noreload"],
+      "django": true,
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    }
+  ]
+}
