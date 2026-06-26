@@ -1,1 +1,7 @@
+<<<<<<< HEAD
 Django>=5.2
+=======
+streamlit>=1.30.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+>>>>>>> eba08de6367c39647b40b3df6a1b2c79787fe5bc
