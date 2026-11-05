@@ -1,200 +1,285 @@
-# 🌏 旅行予算管理アプリ（Django版）
+# 旅行予算管理アプリ（Travel Budget Tracker）
 
-海外旅行中の支出を **現地通貨 × 円換算** でリアルタイム管理する Web アプリ。
-Streamlit 版（`app.py`）を **Django 5.2 / 6.0** に移植したものです。
-9通貨対応・カテゴリ別予算管理・超過アラート機能付き。
+海外旅行中の支出を現地通貨と円換算の両方で記録し、カテゴリ別の予算と超過アラートで使いすぎを防ぐ Django 製の Web アプリです。Streamlit で作ったアプリ（`app.py`）を Django に移植し、ログイン機能とユーザーごとのデータ分離を加えています。
 
----
+[![Python](https://img.shields.io/badge/Python-3.13%20tested-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-%3E%3D5.2-092E20?logo=django&logoColor=white)](https://www.djangoproject.com/)
 
-## 移植の対応表（Streamlit → Django）
+> **English summary:** A Django web app for recording travel expenses in local currencies with automatic conversion to Japanese yen, category budgets, and alerts at 80% and 100% of the budget. It is a port of a Streamlit app (`app.py`) that adds login, sign-up and per-user data separation; charts are drawn with the HTML Canvas API, so no external libraries or CDN are required. `python manage.py seed_demo` creates a demo account (`demo` / `demo12345`) with sample data (the UI is in Japanese).
 
-| Streamlit（元） | Django（移植後） |
-|---|---|
-| `expenses.csv`（CSV保存） | `Expense` モデル（DB保存・ユーザー別） |
-| `budget.json`（JSON保存） | `Budget` モデル（`JSONField`・ユーザー別） |
-| matplotlib（棒・円グラフ画像） | **自前Canvas描画**（外部ライブラリ不要・オフライン動作） |
-| （認証なし） | **ログイン認証＋ユーザー別データ分離**（`django.contrib.auth`） |
-| `st.tabs` 4タブ | 1ページ内タブ（CSS/JS） |
-| `st.form` ×2（予算・支出） | `BudgetForm` / `ExpenseForm`（サーバ側バリデーション） |
-| `st.rerun()` | PRG（Post/Redirect/Get）パターン |
-| サイドバー予算設定 | 左パネルの予算設定フォーム |
+<p align="center">
+  <img src="docs/images/overview.png" alt="メイン画面。左に予算設定、右に支出登録フォームと予算サマリー（総支出・残予算・予算消化率と、80% を超えたことを知らせる注意メッセージ）" width="860">
+</p>
+<p align="center"><sub><code>demo</code> アカウントの画面です。データは <code>seed_demo</code> のサンプル 3 件に、画面から追加した架空の支出 6 件を加えたものです。</sub></p>
 
-> 元の機能（80%警告 / 100%超過エラー、カテゴリ別予算チェック、通貨別・カテゴリ別集計）はすべて再現済み。
-> Web運用向けに **支出の削除** 機能を追加しています。
+## 目次
 
----
+- [主な機能](#主な機能)
+- [クイックスタート](#クイックスタート)
+- [使い方](#使い方)
+- [技術スタック](#技術スタック)
+- [プロジェクト構成](#プロジェクト構成)
+- [設計のポイント](#設計のポイント)
+- [テスト](#テスト)
+- [本番環境で使うとき](#本番環境で使うとき)
+- [ロードマップ](#ロードマップ)
+- [既知の制限](#既知の制限)
 
-## セットアップ手順（PowerShell想定）
+## 主な機能
+
+| 機能 | 内容 |
+| --- | --- |
+| ログインと新規登録 | すべての画面がログイン必須です。`/signup/` でアカウントを作ると、そのままログインした状態になります |
+| ユーザーごとのデータ分離 | 支出と予算はユーザーごとに保存され、ほかのユーザーのデータは表示も削除もできません |
+| 支出の登録 | 日付・内容・カテゴリ・金額・通貨・為替レート・メモを入力すると、円換算額を自動で計算して保存します |
+| 9 通貨・6 カテゴリ | 通貨は JPY・USD・EUR・THB・KRW・TWD・GBP・AUD・CAD、カテゴリは食費・交通・宿泊・買い物・観光・その他です |
+| 予算設定 | 総予算と、カテゴリごとの予算を設定できます |
+| 予算サマリーとアラート | 総支出・残予算・予算消化率と進み具合のバーを表示します。消化率が 80% 以上で注意、総予算を超えるとエラーを表示します |
+| 集計 | 支出一覧（円換算）、通貨別の合計、カテゴリ別の合計とカテゴリ別予算のチェックをタブで切り替えます |
+| グラフ | カテゴリ別支出の棒グラフと円グラフです。Canvas API で描くので、外部ライブラリやインターネット接続は不要です |
+| 支出の削除 | 一覧の「削除」ボタンで削除します（Streamlit 版にはなかった機能です） |
+| 管理画面 | Django admin で、全ユーザーの支出と予算を検索・絞り込みできます |
+
+## クイックスタート
+
+前提：Python 3.12 以上と Git（動作確認：Windows 11 / Python 3.13 / Django 6.1.2、2026 年 11 月）。
+
+> **注意：** `requirements.txt` に Git の競合マーカー（`<<<<<<< HEAD` など）が残っているため、`pip install -r requirements.txt` はエラーになります。Django 版に必要なのは Django だけなので、次の手順では Django を直接インストールします。
+
+### Windows（PowerShell）
 
 ```powershell
-# 1. プロジェクトへ移動
-cd .\travel_budget
-
-# 2. 仮想環境の作成・有効化
+git clone https://github.com/rebelnaoto7/travel_budget_tracker.git
+cd travel_budget_tracker
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# 3. 依存パッケージのインストール
-pip install -r requirements.txt
-
-# 4. マイグレーション（DB作成）
+pip install "Django>=5.2"
 python manage.py migrate
-
-# 5. サンプルデータの投入（任意：元の expenses.csv / budget.json を取り込む）
 python manage.py seed_demo
-
-# 6. 管理者ユーザー作成（任意：/admin を使う場合）
-python manage.py createsuperuser
-
-# 7. 開発サーバー起動
 python manage.py runserver
 ```
 
-ブラウザで <http://127.0.0.1:8000/> を開く。
-管理画面は <http://127.0.0.1:8000/admin/>。
+### macOS / Linux
 
----
-
-## 🔐 認証とユーザー別データ分離
-
-このアプリは **ログイン必須** で、データはユーザーごとに完全分離されます。
-
-### 仕組み
-
-| 項目 | 実装 |
-|---|---|
-| ログイン状態の判定 | 全ビューに `@login_required`。未ログインは `/accounts/login/` へ自動リダイレクト |
-| 支出のデータ分離 | `Expense.user`（外部キー）。一覧・集計は `filter(user=request.user)` で本人分のみ |
-| 予算のデータ分離 | `Budget.user`（OneToOne）。`Budget.get_for_user(user)` で本人の予算を取得 |
-| 他人データの保護 | 削除は `filter(pk=pk, user=request.user)`。他人の支出は削除不可 |
-| 認証URL | `django.contrib.auth.urls`（login / logout / password_change 等） |
-| 新規登録 | 自作 `signup` ビュー（`UserCreationForm`）。登録後そのままログイン |
-
-### 画面
-
-| URL | 内容 |
-|---|---|
-| `/accounts/login/` | ログイン |
-| `/signup/` | 新規登録 |
-| `/` | メイン（要ログイン）。右上にユーザー名＋ログアウト |
-
-### デモ用アカウント
-
-`python manage.py seed_demo` 実行時に自動作成されます。
-
-```
-ユーザー名: demo
-パスワード: demo12345
+```bash
+git clone https://github.com/rebelnaoto7/travel_budget_tracker.git
+cd travel_budget_tracker
+python3 -m venv .venv
+source .venv/bin/activate
+pip install "Django>=5.2"
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver
 ```
 
-> 発表会で複数人に試してもらう場合は、各自 `/signup/` から登録すれば、
-> それぞれ独立した予算・支出データを持てます。
+ブラウザで <http://127.0.0.1:8000/> を開くと、ログイン画面が表示されます。`seed_demo` が作ったデモアカウントでログインしてください。
 
-### 検証済みのデータ分離（自動テストで確認）
+| ユーザー名 | パスワード |
+| --- | --- |
+| `demo` | `demo12345` |
 
-- ✅ 未ログインでトップ → ログイン画面へリダイレクト
-- ✅ alice の画面に bob のデータは表示されない
-- ✅ alice は bob の支出を削除できない
-- ✅ 予算もユーザーごとに独立
-- ✅ ログアウト後はトップにアクセス不可
+- 自分用のアカウントは、ログイン画面の「新規登録」（<http://127.0.0.1:8000/signup/>）から作れます。アカウントごとに予算と支出は別々です。
+- 管理画面（<http://127.0.0.1:8000/admin/>）を使うときは、先に `python manage.py createsuperuser` で管理者ユーザーを作ります。
 
----
+### うまく動かないとき
 
-## VS Code で開いて実行する
+| 症状 | 対処 |
+| --- | --- |
+| `pip install -r requirements.txt` が `Invalid requirement: '<<<<<<< HEAD'` で失敗する | 競合マーカーが残っているためです。`pip install "Django>=5.2"` を使います |
+| `Activate.ps1` が実行ポリシーで止められる | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` を実行してから、もう一度有効化します（そのウィンドウだけに効きます） |
+| ログインできない | `python manage.py seed_demo` を実行したか確認します |
+| `seed_demo` を 2 回実行したら支出が重複した | `python manage.py seed_demo --reset` で入れ直します |
+| 金額に `12.50`、予算に `12345` のような値を入れると送信できない | 入力欄の刻み幅による制限です（[既知の制限](#既知の制限)を参照） |
 
-このプロジェクトには `.vscode/` 設定が同梱されています。
+### VS Code で開く
 
-### 初回だけ行うこと
+`.vscode/` に VS Code の設定が入っています。
 
-1. **フォルダを開く**：VS Code で `ファイル → フォルダーを開く` → `travel_budget` フォルダを選択。
-2. **推奨拡張機能を入れる**：右下に「推奨拡張機能をインストールしますか？」と出るので **インストール**。
-   （Python / Python Debugger / Django の3つ。手動なら拡張機能パネルで検索）
-3. **仮想環境を作る**：ターミナル（`Ctrl + @`）で
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-   ```
-   > `Activate.ps1` でエラーが出たら、管理者PowerShellで一度だけ
-   > `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned`
-4. **インタープリタを選ぶ**：`Ctrl + Shift + P` → `Python: Select Interpreter` → `.venv` を選択。
-   （`.vscode/settings.json` で自動的に `.venv` を指すよう設定済み）
-5. **DB作成とデータ投入**：
-   ```powershell
-   python manage.py migrate
-   python manage.py seed_demo
-   ```
+| ファイル | 内容 |
+| --- | --- |
+| `extensions.json` | 推奨拡張機能：Python、Python Debugger、Django（`batisteo.vscode-django`） |
+| `launch.json` | `F5` で「Django: runserver」をデバッグ実行します（自動リロードなしの設定もあります） |
+| `tasks.json` | 「ターミナル」→「タスクの実行」から migrate・seed_demo・runserver を実行できます |
+| `settings.json` | `.venv` の Python を既定のインタープリターにする設定、Django テンプレートの色分けなど |
 
-### 2回目以降の実行
+`settings.json` と `tasks.json` は、Windows のパス（`.venv\Scripts\python.exe`）を前提にしています。macOS や Linux では、コマンドパレットの「Python: Select Interpreter」で `.venv` の Python を選び、コマンドはターミナルから実行してください。
 
-- **`F5` キー** を押すと「Django: runserver」が起動し、デバッグ実行できます。
-  （`.vscode/launch.json` で設定済み。ブレークポイントも使えます）
-- デバッグ不要なら、ターミナルで `python manage.py runserver`。
-- ブラウザで <http://127.0.0.1:8000/> を開く。
+## 使い方
 
-### 同梱した .vscode 設定
+### 画面の流れ
 
-| ファイル | 役割 |
-|---|---|
-| `launch.json` | `F5` で Django をデバッグ起動 |
-| `settings.json` | `.venv` を既定インタープリタに／Djangoテンプレート色分け／UTF-8固定 |
-| `extensions.json` | 推奨拡張機能（Python・Debugpy・Django） |
-| `tasks.json` | migrate / seed_demo / runserver をタスクから実行 |
+1. 左の **予算設定** で総予算とカテゴリ別の予算（円）を入力し、「予算を保存」を押します。
+2. **支出登録** で日付・内容・カテゴリ・金額（現地通貨）・通貨・為替レートを入力し、「支出を追加」を押します。為替レートは「1 通貨が何円か」で入力します（例：1 USD = 159 円なら `159`）。円換算額（金額 × 為替レート）は自動で計算されます。
+3. **予算サマリー** に、総支出・残予算・予算消化率が表示されます。
+4. 下のタブで、**支出一覧（円換算）**・**通貨別集計**・**カテゴリ別集計**・**グラフ** を切り替えます。支出は一覧の「削除」ボタンで削除できます（確認ダイアログが出ます）。
+5. 右上の「ログアウト」でログアウトします。
 
----
+<p align="center">
+  <img src="docs/images/expenses.png" alt="支出一覧タブ。日付・内容・カテゴリ・現地通貨と円の金額・為替レート・メモ・削除ボタンの表" width="860">
+</p>
+<p align="center">
+  <img src="docs/images/category.png" alt="カテゴリ別集計タブ。カテゴリごとの合計金額と、宿泊は予算の 80% 超、食費は予算超過、そのほかは予算内という判定" width="860">
+</p>
+<p align="center">
+  <img src="docs/images/charts.png" alt="グラフタブ。カテゴリ別支出の棒グラフと、支出割合の円グラフ" width="860">
+</p>
+<p align="center"><sub>上から、支出一覧タブ・カテゴリ別集計タブ・グラフタブ（トップの画像と同じ架空のデータ）</sub></p>
 
-## ディレクトリ構成
+### 予算アラートの基準
 
+| 対象 | 条件 | 表示 |
+| --- | --- | --- |
+| 総予算 | 総支出が総予算を超えた | 「総予算を超過しています。」（赤） |
+| 総予算 | 予算消化率が 80% 以上 | 「予算消化率が80%を超えています。」（黄） |
+| カテゴリ | 支出がカテゴリの予算を超えた | 「予算超過」（赤） |
+| カテゴリ | 支出がカテゴリの予算の 80% 以上 | 「予算の80%超」（黄） |
+| カテゴリ | それ以外 | 「予算内」（緑） |
+
+総予算を 0 円にするとアラートは出ません。カテゴリのチェックは、支出があって予算が 0 円より大きいカテゴリだけが対象です。
+
+### 入力のルール
+
+- 内容は必須です。金額と為替レートは 0 より大きい値にします。
+- 総予算とカテゴリ別の予算は 0 以上の整数（円）です。ブラウザの入力欄では 1,000 円単位で入力します。
+- 為替レートは自動では取得しません。両替やカードの明細のレートなどを入力してください。
+- 新規登録のパスワードは、Django 標準のルール（8 文字以上、よく使われるパスワードや数字だけのものは不可など）でチェックされます。
+
+### デモデータ（seed_demo）
+
+```bash
+python manage.py seed_demo                # demo ユーザーを作り、サンプルデータを取り込む
+python manage.py seed_demo --reset        # demo の支出をすべて削除してから取り込み直す
+python manage.py seed_demo --user alice   # 指定したユーザーに取り込む
 ```
-travel_budget/
-├── .vscode/                    # VS Code 設定（launch/settings/extensions/tasks）
+
+- 取り込むのは `sample_data/budget.json`（総予算 100,000 円とカテゴリ別の予算）と `sample_data/expenses.csv`（支出 3 件、合計 25,400 円）です。
+- `--reset` を付けずにもう一度実行すると、同じ支出が重複して登録されます。予算は毎回 `budget.json` の値で上書きされます。
+- `--user` に存在しないユーザー名を指定すると、パスワード `demo12345` でそのユーザーを作ります。既存のユーザーを指定した場合、パスワードは変わりません。
+
+### 管理画面
+
+<http://127.0.0.1:8000/admin/> では、管理者ユーザーで全ユーザーの支出と予算を確認できます。支出はユーザー・カテゴリ・通貨・日付で絞り込み、内容とメモで検索できます。管理画面で支出を編集した場合も、円換算額は保存時に計算し直されます。
+
+## 技術スタック
+
+| 分類 | 使用技術 |
+| --- | --- |
+| 言語 | Python（3.13 で動作確認） |
+| Web フレームワーク | Django（`>=5.2`。6.1.2 で動作確認） |
+| 認証 | Django 標準の認証（`django.contrib.auth`） |
+| データベース | SQLite |
+| 画面 | Django テンプレート。CSS と JavaScript はテンプレートの中に記述 |
+| グラフ | Canvas API による自前の描画（外部ライブラリなし） |
+
+## プロジェクト構成
+
+```text
+travel_budget_tracker/
 ├── manage.py
-├── requirements.txt
-├── db.sqlite3                  # migrate 後に自動生成（.gitignore対象）
-├── sample_data/
-│   ├── budget.json             # 元データ（seed_demo で取込）
-│   └── expenses.csv            # 元データ（seed_demo で取込）
-├── travelbudget/               # プロジェクト設定
-│   ├── settings.py             # TIME_ZONE=Asia/Tokyo, LANGUAGE_CODE=ja
-│   └── urls.py
-└── tracker/                    # アプリ本体
-    ├── models.py               # Budget / Expense
-    ├── forms.py                # BudgetForm / ExpenseForm
-    ├── views.py                # index（PRG）/ delete_expense
-    ├── urls.py
-    ├── admin.py
-    ├── management/commands/seed_demo.py
-    └── templates/tracker/index.html
+├── requirements.txt            # 競合マーカーが残っている（クイックスタートを参照）
+├── myproject/                  # Django プロジェクトの設定
+│   ├── settings.py             # LANGUAGE_CODE=ja、TIME_ZONE=Asia/Tokyo、ログイン後の移動先など
+│   ├── urls.py                 # /admin/、/accounts/（ログイン・ログアウト）、tracker アプリ
+│   ├── asgi.py
+│   └── wsgi.py
+├── tracker/                    # Django アプリ本体
+│   ├── models.py               # Budget（ユーザーごとに 1 件）と Expense（支出）
+│   ├── forms.py                # BudgetForm と ExpenseForm（サーバー側の入力チェック）
+│   ├── views.py                # index（画面と集計）、delete_expense（削除）、signup（新規登録）
+│   ├── urls.py                 # /、/signup/、/expense/<id>/delete/
+│   ├── admin.py                # 管理画面の一覧・検索・絞り込み
+│   ├── management/commands/
+│   │   └── seed_demo.py        # デモユーザーとサンプルデータの投入
+│   ├── migrations/
+│   └── templates/
+│       ├── tracker/index.html  # メイン画面（タブ・Canvas のグラフ）
+│       └── registration/       # login.html（ログイン）と signup.html（新規登録）
+├── sample_data/                # seed_demo が取り込むサンプル（budget.json・expenses.csv）
+├── app.py                      # 移植元の Streamlit 版（参考用）
+├── budget.json                 # Streamlit 版が読み書きする予算ファイル
+├── expenses.csv                # Streamlit 版が読み書きする支出ファイル
+├── .vscode/                    # VS Code の設定
+└── docs/
+    ├── DEVELOPMENT.md          # 開発メモ（Streamlit 版との対応表・データモデル・URL）
+    └── images/                 # README のスクリーンショット
 ```
 
----
+- Django 版として動くのは `myproject/` と `tracker/` です。
+- `app.py` は移植元の Streamlit 版です。ログイン機能はなく、画面で保存すると、コマンドを実行したフォルダの `expenses.csv` と `budget.json` を書き換えます。リポジトリ直下のこの 2 ファイルは、`sample_data/` と同じ内容です。
+- Streamlit 版を動かすときは、Django 版と同じ仮想環境で次のコマンドを実行します。既定では <http://localhost:8501/> で開きます。グラフの日本語フォントには、Windows のフォント（Yu Gothic・Meiryo など）を指定しています。
 
-## データモデル
+```bash
+pip install "streamlit>=1.30.0" "pandas>=2.0.0" "matplotlib>=3.7.0"
+streamlit run app.py
+```
 
-### Expense（支出）
-| フィールド | 型 | 説明 |
-|---|---|---|
-| date | DateField | 日付 |
-| item | CharField | 内容 |
-| category | CharField(choices) | 食費/交通/宿泊/買い物/観光/その他 |
-| amount_local | FloatField | 金額（現地通貨） |
-| currency | CharField(choices) | JPY/USD/EUR/THB/KRW/TWD/GBP/AUD/CAD |
-| rate_to_jpy | FloatField | 為替レート（1通貨=何円） |
-| amount_jpy | FloatField | 円換算額（`save()` で自動計算） |
-| memo | CharField | メモ（任意） |
+## 設計のポイント
 
-### Budget（予算・単一レコード pk=1）
-| フィールド | 型 | 説明 |
-|---|---|---|
-| total_budget_jpy | PositiveIntegerField | 総予算（円） |
-| category_budgets | JSONField | `{カテゴリ名: 金額}`（budget.json と同構造） |
+- **ユーザーごとのデータ分離**：`Expense` は `user`（外部キー）、`Budget` は `user`（OneToOne）を持ちます。一覧・集計・削除はすべて `user=request.user` で絞り込むので、ほかのユーザーの支出は表示も削除もできません。予算は `Budget.get_for_user()` で取得し、まだなければ初期値（総予算 100,000 円）で作ります。
+- **ログイン必須**：画面のビューに `@login_required` を付けています。ログインしていないときは、ログイン画面（`/accounts/login/`）に移動します。
+- **PRG パターン**：フォームの保存に成功したらリダイレクトします。ブラウザで再読み込みしても二重に登録されません（Streamlit の `st.rerun()` の置き換え）。
+- **削除とログアウトは POST だけ**：削除の URL に GET でアクセスしても削除されず、トップに戻るだけです。ログアウトも CSRF トークン付きのフォームで POST します。
+- **円換算はモデルで計算**：`Expense.save()` で `amount_jpy = amount_local × rate_to_jpy` を計算するので、どこから保存しても円換算額がそろいます。
+- **入力チェックはサーバー側でも行う**：ブラウザのチェックに加えて、フォームクラスで必須項目と正の値を確認します。
 
----
+Streamlit 版との対応表とデータモデルの詳細は、[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) にまとめています。
 
-## 今後の改善案（一般公開を見据えて）
+## テスト
 
-1. ~~**認証の追加**~~ — ✅ 実装済み（ログイン必須化＋ユーザー別データ分離）。
-2. **為替レートの自動取得** — 手入力の `rate_to_jpy` を外部API（為替レート）で補完。
-3. **本番DB** — Azure App Service 等では SQLite はファイルが揮発するため **PostgreSQL** を推奨。
-4. **静的ファイル配信** — 本番は `collectstatic` + WhiteNoise もしくは CDN。
-5. **テスト** — `tests.py` に集計・バリデーションの自動テストを追加。
+自動テストはまだありません。`python manage.py test` を実行すると、次のように表示されます。
+
+```text
+Found 0 test(s).
+System check identified no issues (0 silenced).
+
+----------------------------------------------------------------------
+Ran 0 tests in 0.000s
+
+NO TESTS RAN
+```
+
+代わりに、開発サーバーと 2 つのアカウント（`demo` と新規登録したユーザー）を使い、HTTP リクエストで次の動作を手作業で確認しました（Windows 11 / Python 3.13 / Django 6.1.2、2026 年 11 月）。
+
+| 確認したこと | 結果 |
+| --- | --- |
+| ログインせずに `/` を開く | ログイン画面（`/accounts/login/?next=/`）に移動する |
+| 間違ったパスワードでログインする | エラーメッセージが表示される |
+| 新規登録する | そのままログインし、支出 0 件・総予算 100,000 円の初期状態で始まる |
+| 新規ユーザーが支出と予算を保存する | `demo` の支出と予算は変わらない |
+| 新規ユーザーが `demo` の支出の削除を POST する | 「対象の支出が見つかりません」と表示され、削除されない |
+| 削除の URL を GET で開く | 削除されず、トップに戻る |
+| 金額 0 で支出を登録する | 「金額は0より大きくしてください。」と表示され、登録されない |
+| GET でログアウトしようとする | 405（Method Not Allowed）になり、ログアウトされない |
+| POST でログアウトしたあと `/` を開く | ログイン画面に移動する |
+| 管理者でない `demo` で `/admin/` を開く | 管理画面のログイン画面に移動する |
+
+## 本番環境で使うとき
+
+`myproject/settings.py` は開発用の設定のままで、環境変数で切り替える仕組みもありません。インターネットに公開する場合は、少なくとも次の点を変更してください。
+
+| 項目 | 現在の値 | 本番での対応 |
+| --- | --- | --- |
+| `SECRET_KEY` | 開発用の値がソースコードに書かれている | このリポジトリで公開済みの値なので、新しい長いランダムな値にし、環境変数などから読み込む |
+| `DEBUG` | `True` | `False` にする |
+| `ALLOWED_HOSTS` | `[]` | 公開するホスト名を設定する |
+| `STATIC_ROOT` | 未設定（`collectstatic` が `ImproperlyConfigured` で失敗する） | 設定して `collectstatic` を実行し、Web サーバーや WhiteNoise で配信する |
+| データベース | SQLite | 複数の人が使うなら PostgreSQL などを検討する |
+| HTTPS | 関連する設定なし | `check --deploy` の警告に従って設定する |
+
+- 現在の設定で `python manage.py check --deploy` を実行すると、7 件の警告（`security.W004`・`W008`・`W009`・`W012`・`W016`・`W018`・`W020`）が出ます。W009 は SECRET_KEY が安全でないこと、W018 は DEBUG が True であること、W020 は ALLOWED_HOSTS が空であることを示しています。
+- アプリの画面は CSS と JavaScript をテンプレートに直接書いているため静的ファイルを使いませんが、管理画面は静的ファイルが必要です。
+- `seed_demo` は、パスワードが公開されているデモアカウント（`demo` / `demo12345`）を作ります。公開する環境では実行しないか、実行後に `demo` ユーザーを削除してください。
+
+## ロードマップ
+
+- 為替レートの自動取得（現在は手入力）
+- 本番向けの設定（環境変数での切り替え、PostgreSQL、静的ファイルの配信）
+- 集計と入力チェックの自動テスト
+
+## 既知の制限
+
+- **`requirements.txt` が使えない**：Git の競合マーカーが残っているため、`pip install -r requirements.txt` が失敗します。[クイックスタート](#クイックスタート)の手順で回避できます。
+- **入力欄の刻み幅による制限**：入力欄の刻み幅（`step`）が金額は `1`、為替レートは `0.1`、予算は `1000` のため、ブラウザから送信できるのは、金額は整数、為替レートは小数第 1 位まで、予算は 1,000 円単位の値だけです。たとえば金額 `12.50`、為替レート `159.25` や `0.11`（1 KRW ≒ 0.11 円）、予算 `12345` は送信できません（サーバー側の検証はこれらの値も受け付けます）。
+- **メッセージの色**：画面上部のメッセージは、エラー（例：「対象の支出が見つかりません」）も成功と同じ緑色で表示されます。
+- **桁区切りなし**：画面の金額は `82645 円` のように、3 桁ごとの区切りなしで表示されます。
+- **選択欄の未選択の表示**：Django 6.1 では、支出登録のカテゴリと通貨の選択欄で、未選択の項目が英語（`- Select an option -`）で表示されます。
